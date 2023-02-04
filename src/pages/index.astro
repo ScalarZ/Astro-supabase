@@ -1,0 +1,167 @@
+---
+import type { PostgrestError } from "@supabase/supabase-js";
+import { supabase } from "../../lib/supabase";
+
+const { data: names, error } = (await supabase
+  .from("names")
+  .select("id, name")) as {
+  data: { id: number; name: string }[];
+  error: PostgrestError | null;
+};
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>Astro</title>
+  </head>
+  <body class="p-4 min-h-screen text-white bg-gray-900">
+    <h1 class="mb-4 text-2xl text-center text-orange-600 font-bold">Astro</h1>
+    <form class="grid place-items-center gap-y-2">
+      <input
+        id="input"
+        type="text"
+        class="px-2 py-1 border border-gray-700 rounded bg-gray-800 outline-none"
+      />
+      <button
+        id="add-user"
+        class="px-4 py-1 border border-transparent rounded bg-orange-700 text-sm font-medium hover:border-orange-300"
+        >Add new name</button
+      >
+    </form>
+    <h3 class="mt-4 text-center text-xl font-medium">Names list</h3>
+    <ul id="list" class="mx-auto mt-2 max-w-xl grid gap-y-1">
+      {
+        names.map(({ id, name }) => (
+          <li class="p-2 bg-gray-800 rounded flex justify-between gap-x-2">
+            {name}
+            <button
+              id={id.toString()}
+              class="del-btn px-2 border border-transparent rounded bg-red-600 text-xs font-medium hover:border-red-400"
+            >
+              delete
+            </button>
+          </li>
+        ))
+      }
+    </ul>
+  </body>
+</html>
+
+<script>
+  import type { PostgrestError } from "@supabase/supabase-js";
+  import { supabase } from "../../lib/supabase";
+  const input = document.querySelector("#input") as HTMLInputElement;
+  const list = document.querySelector("#list") as HTMLUListElement;
+  const addNameBtn = document.querySelector("#add-user") as HTMLButtonElement;
+  const delBtn = document.querySelectorAll(".del-btn");
+
+  let name = "";
+
+  input.oninput = (e) => {
+    const { value } = e.target as HTMLInputElement;
+    name = value;
+  };
+
+  addNameBtn.onclick = (e) => addElement(e);
+
+  delBtn.forEach((e) => {
+    const btn = e as HTMLButtonElement;
+    btn.onclick = () => deleteElement(btn);
+  });
+
+  function createElement(
+    name: string,
+    className?: string,
+    innerText?: string,
+    id?: string,
+    eventFunction?: () => void
+  ) {
+    const el = document.createElement(name);
+    if (className) el.className = className;
+    if (id) el.id = id;
+    if (innerText) el.innerText = innerText;
+    if (eventFunction) el.onclick = eventFunction;
+    return el;
+  }
+  async function addElement(e: Event) {
+    e.preventDefault();
+    if (!name) return;
+    const prevClass = addNameBtn.className;
+    const prevText = addNameBtn.innerText;
+    try {
+      //loading UI
+      addNameBtn.innerText += "...";
+      addNameBtn.className = addNameBtn.className
+        .replace("bg-orange-700", "bg-orange-900")
+        .replace("hover:border-orange-300", "");
+
+      const { data: user, error } = (await supabase
+        .from("names")
+        .insert({ name })
+        .select()
+        .single()) as {
+        data: { id: string; name: string };
+        error: PostgrestError | null;
+      };
+      if (error) throw Error(error.message);
+
+      input.value = "";
+      addNameBtn.innerText = prevText;
+      addNameBtn.className = prevClass;
+
+      //appending the new name to the current list
+      const li = createElement(
+        "li",
+        "p-2 bg-gray-800 rounded flex justify-between gap-x-2",
+        user.name
+      );
+      const delBtn = createElement(
+        "button",
+        "del-btn px-2 border border-transparent rounded bg-red-600 text-xs font-medium hover:border-red-400",
+        "delete",
+        user.id,
+        () => {
+          deleteElement(delBtn);
+        }
+      ) as HTMLButtonElement;
+      li.appendChild(delBtn);
+      list.appendChild(li);
+    } catch (e) {
+      console.error(e);
+      addNameBtn.innerText = prevText;
+      addNameBtn.className = prevClass;
+    }
+  }
+
+  async function deleteElement(btn: HTMLButtonElement) {
+    const prevClass = btn.className;
+    const prevText = btn.innerText;
+    try {
+      //loading UI
+      btn.innerText += "...";
+      btn.className = btn.className
+        .replace("bg-red-600", "bg-red-800")
+        .replace("hover:border-red-400", "");
+
+      const { error } = await supabase
+        .from("names")
+        .delete()
+        .eq("id", Number(btn.id));
+      if (error) throw Error(error.message);
+
+      btn.innerText = prevText;
+      btn.className = prevClass;
+
+      //appending the new name to the current list
+      if (btn.parentNode) list.removeChild(btn.parentNode);
+    } catch (e) {
+      console.error(e);
+      btn.innerText = prevText;
+      btn.className = prevClass;
+    }
+  }
+</script>
